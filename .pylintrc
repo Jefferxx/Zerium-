@@ -1,0 +1,10 @@
+[MESSAGES CONTROL]
+disable=
+    C0114, ; Missing module docstring (No exigir comentarios al inicio de archivo)
+    C0115, ; Missing class docstring
+    C0116, ; Missing function or method docstring
+    C0304, ; Final newline missing
+    W0611, ; Unused import (Ignorar advertencia de models no usado)
+    E0401, ; Import error (Ignorar falsos positivos de importación)
+    E0611, ; No name in module
+    W0718  ; Catching too general exception
