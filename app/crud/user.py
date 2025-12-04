@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 from app.models import User
 from app.schemas.user import UserCreate
-from passlib.context import CryptContext
 
 # Configuración de encriptación (Hashing)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -29,3 +29,7 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     db.refresh(db_user) # Recargar para obtener el ID generado y created_at
     return db_user
+
+def get_users(db: Session, skip: int = 0, limit: int = 100):
+    """Obtiene una lista de usuarios"""
+    return db.query(User).offset(skip).limit(limit).all()
