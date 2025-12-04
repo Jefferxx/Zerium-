@@ -5,9 +5,10 @@ from app.database import engine, Base, get_db
 from app import models 
 # Importamos los routers (las rutas de nuestra API)
 from app.routers import users
-from app.routers import auth  # <--- NUEVO: Importamos el router de Auth
+from app.routers import auth 
 from app.routers import properties
-
+from app.routers import contracts # <--- NUEVO
+from app.routers import payments  # <--- NUEVO
 
 # Crear las tablas en la base de datos automáticamente
 models.Base.metadata.create_all(bind=engine)
@@ -19,10 +20,11 @@ app = FastAPI(
 )
 
 # --- REGISTRO DE ROUTERS ---
-# Aquí le decimos a FastAPI: "Agrega estas rutas a tu lista"
 app.include_router(users.router)
-app.include_router(auth.router)  # <--- NUEVO: Registramos las rutas de Login
+app.include_router(auth.router)
 app.include_router(properties.router)
+app.include_router(contracts.router) # <--- NUEVO: Activamos contratos
+app.include_router(payments.router)  # <--- NUEVO: Activamos pagos
 
 @app.get("/")
 def read_root():
