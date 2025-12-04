@@ -9,34 +9,31 @@ class TicketPriority(str, Enum):
     high = "high"
     emergency = "emergency"
 
-class TicketStatus(str, Enum):
-    open = "open"
-    in_progress = "in_progress"
-    resolved = "resolved"
-    closed = "closed"
+# Eliminamos TicketStatus porque tu DB no lo tiene, usa is_resolved
+# class TicketStatus(str, Enum): ... 
 
 class TicketBase(BaseModel):
     title: str
     description: Optional[str] = None
     priority: TicketPriority = TicketPriority.medium
     property_id: str
-    unit_id: Optional[str] = None # Opcional: el daño puede ser en el pasillo (edificio)
-    photo_url: Optional[str] = None # Para cumplir RF-10 (Evidencia)
+    unit_id: Optional[str] = None
+    photo_url: Optional[str] = None
 
 class TicketCreate(TicketBase):
     pass
 
 class TicketUpdate(BaseModel):
-    status: Optional[TicketStatus] = None
+    is_resolved: bool # Usamos booleano directo
     priority: Optional[TicketPriority] = None
-    technician_notes: Optional[str] = None
 
 class TicketResponse(TicketBase):
     id: str
-    status: TicketStatus
+    # status: TicketStatus <--- CAMBIAMOS ESTO
+    is_resolved: bool     # <--- POR ESTO (Coincide con DB)
     requester_id: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    # updated_at viene del mixin, pero a veces Pydantic se queja si es null
     
     class Config:
         from_attributes = True
