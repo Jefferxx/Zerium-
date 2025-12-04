@@ -9,6 +9,7 @@ from app.routers import auth
 from app.routers import properties
 from app.routers import contracts
 from app.routers import payments
+from app.routers import tickets
 
 # Crear tablas
 models.Base.metadata.create_all(bind=engine)
@@ -40,6 +41,7 @@ app.include_router(auth.router)
 app.include_router(properties.router)
 app.include_router(contracts.router)
 app.include_router(payments.router)
+app.include_router(tickets.router)
 
 @app.get("/")
 def read_root():
