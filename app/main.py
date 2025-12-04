@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware # <--- 1. IMPORTAR ESTO
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import engine, Base, get_db
@@ -10,6 +10,7 @@ from app.routers import properties
 from app.routers import contracts
 from app.routers import payments
 
+# Crear tablas
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -18,22 +19,21 @@ app = FastAPI(
     description="Backend profesional para la gestión inmobiliaria Zerium"
 )
 
-# --- 2. CONFIGURACIÓN DE CORS (CRÍTICO) ---
-# Esto permite que el Frontend (puerto 5173) hable con el Backend
+# --- CONFIGURACIÓN DE CORS PARA PRODUCCIÓN ---
 origins = [
-    "http://localhost:5173",    # Frontend Vite Local
-    "http://127.0.0.1:5173",    # Alternativa IP
-    "http://localhost:3000",    # Por si usas otro puerto a veces
+    "http://localhost:5173",    # Tu entorno local
+    "http://127.0.0.1:5173",    # Tu entorno local (IP)
+    "*"                         # <--- EL COMODÍN MÁGICO PARA EL PRIMER DESPLIEGUE
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,      # Qué dominios pueden entrar
-    allow_credentials=True,     # Permitir cookies/tokens
-    allow_methods=["*"],        # Permitir todos los métodos (GET, POST, PUT, DELETE)
-    allow_headers=["*"],        # Permitir todos los headers
+    allow_origins=origins,      # Usa la lista con el asterisco
+    allow_credentials=True,
+    allow_methods=["*"],        # Permitir todo (GET, POST, etc.)
+    allow_headers=["*"],        # Permitir tokens y auth headers
 )
-# ------------------------------------------
+# ---------------------------------------------
 
 app.include_router(users.router)
 app.include_router(auth.router)
