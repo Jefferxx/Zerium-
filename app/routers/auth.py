@@ -47,4 +47,9 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     )
     
     # 4. Devolvemos el token al usuario
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "role": user.role,        # <--- AGREGADO
+        "user_id": user.id        # <--- AGREGADO (Útil para después)
+    }
