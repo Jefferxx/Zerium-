@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import Contract, Unit, User, UnitStatus
+from app.models import Contract, Unit, User, UnitStatus, Property
 from app.schemas.contract import ContractCreate, ContractResponse
 from app.dependencies import get_current_user
 
@@ -20,8 +20,6 @@ def create_contract(
 ):
     """
     Crea un nuevo contrato de alquiler.
-    - Valida que la unidad exista y esté disponible.
-    - Cambia el estado de la unidad a 'occupied'.
     """
     # 1. Validar que la unidad existe
     unit = db.query(Unit).filter(Unit.id == contract_data.unit_id).first()
@@ -30,7 +28,6 @@ def create_contract(
     
     # 2. Validar disponibilidad
     if unit.status != UnitStatus.available:
-        # unit.status es un Enum, usamos .value para mostrar el texto real
         raise HTTPException(status_code=400, detail=f"Unit is currently {unit.status.value}")
 
     # 3. Crear Contrato
@@ -52,14 +49,16 @@ def create_contract(
     db.refresh(new_contract)
     return new_contract
 
-# 2. LISTAR CONTRATOS
+# 2. LISTAR CONTRATOS (CON SEGURIDAD)
 @router.get("/", response_model=List[ContractResponse])
 def get_contracts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Obtiene todos los contratos.
-    Incluye datos anidados de Unidad e Inquilino gracias al Schema.
+    Obtiene contratos filtrados por rol.
+    - Tenant: Solo ve SU contrato.
+    - Landlord: Ve contratos de SUS propiedades.
     """
-    # Si quisieras filtrar por el usuario logueado (ej. solo ver mis contratos):
-    # return db.query(Contract).filter(Contract.tenant_id == current_user.id).all()
+    if current_user.role == "tenant":
+        return db.query(Contract).filter(Contract.tenant_id == current_user.id).all()
     
-    return db.query(Contract).all()
+    # Si es Landlord, usamos JOIN para llegar desde Contract -> Unit -> Property -> Owner
+    return db.query(Contract).join(Unit).join(Property).filter(Property.owner_id == current_user.id).all()
