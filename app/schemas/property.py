@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from app.models import PropertyType, UnitType, UnitStatus
@@ -17,6 +17,17 @@ class UnitBase(BaseModel):
 
 class UnitCreate(UnitBase):
     pass
+
+# --- NUEVO: Esquema para Editar Unidad ---
+class UnitUpdate(BaseModel):
+    unit_number: Optional[str] = None
+    type: Optional[UnitType] = None
+    floor: Optional[int] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[Decimal] = None
+    area_m2: Optional[Decimal] = None
+    base_price: Optional[Decimal] = None
+    status: Optional[UnitStatus] = None
 
 class UnitResponse(UnitBase):
     id: str
