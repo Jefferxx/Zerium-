@@ -11,9 +11,9 @@ from app.routers import (
     auth, 
     properties, 
     contracts, 
-    payments, 
+    payments, # <--- Aquí está, una sola vez
     tickets, 
-    dashboard  # <--- NUEVO
+    dashboard
 )
 
 # Crear tablas
@@ -29,7 +29,7 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",    # Tu entorno local
     "http://127.0.0.1:5173",    # Tu entorno local (IP)
-    "*"                         # Permitir todo (Vercel, Render, etc.)
+    "*"                         # Permitir todo
 ]
 
 app.add_middleware(
@@ -41,14 +41,14 @@ app.add_middleware(
 )
 # ---------------------------------------------
 
-# Inclusión de Routers (El orden no altera el producto, pero auth primero es buena práctica)
+# Inclusión de Routers
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(properties.router)
 app.include_router(contracts.router)
-app.include_router(payments.router)
+app.include_router(payments.router) # <--- Una sola vez
 app.include_router(tickets.router)
-app.include_router(dashboard.router) # <--- REGISTRAMOS EL DASHBOARD
+app.include_router(dashboard.router)
 
 @app.get("/")
 def read_root():
