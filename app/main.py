@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import engine, Base, get_db
 from app import models 
-from app.routers import users
-from app.routers import auth 
-from app.routers import properties
-from app.routers import contracts
-from app.routers import payments
-from app.routers import tickets
+
+# Importación limpia de todos los routers
+from app.routers import (
+    users, 
+    auth, 
+    properties, 
+    contracts, 
+    payments, 
+    tickets, 
+    dashboard  # <--- NUEVO
+)
 
 # Crear tablas
 models.Base.metadata.create_all(bind=engine)
@@ -24,24 +29,26 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",    # Tu entorno local
     "http://127.0.0.1:5173",    # Tu entorno local (IP)
-    "*"                         # <--- EL COMODÍN MÁGICO PARA EL PRIMER DESPLIEGUE
+    "*"                         # Permitir todo (Vercel, Render, etc.)
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,      # Usa la lista con el asterisco
+    allow_origins=origins,      
     allow_credentials=True,
-    allow_methods=["*"],        # Permitir todo (GET, POST, etc.)
-    allow_headers=["*"],        # Permitir tokens y auth headers
+    allow_methods=["*"],        
+    allow_headers=["*"],        
 )
 # ---------------------------------------------
 
-app.include_router(users.router)
+# Inclusión de Routers (El orden no altera el producto, pero auth primero es buena práctica)
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(properties.router)
 app.include_router(contracts.router)
 app.include_router(payments.router)
 app.include_router(tickets.router)
+app.include_router(dashboard.router) # <--- REGISTRAMOS EL DASHBOARD
 
 @app.get("/")
 def read_root():
