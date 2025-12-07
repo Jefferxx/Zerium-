@@ -28,7 +28,6 @@ def create_payment(
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
     # Validar que el contrato pertenezca a una propiedad de este dueño
-    # Contract -> Unit -> Property -> Owner
     is_owner = db.query(Property).join(Unit).filter(
         Unit.id == contract.unit_id,
         Property.owner_id == current_user.id
@@ -47,9 +46,11 @@ def create_payment(
     )
     
     # 2. Actualizar el Balance del Contrato (Restar deuda)
-    # Nota: Si quisieras llevar un historial de saldo a favor, la lógica sería más compleja.
-    # Por ahora, asumimos que 'balance' disminuye con los pagos.
-    contract.balance = contract.balance - payment.amount
+    # Validamos si es None para evitar errores si la base de datos vino vacía
+    current_balance = contract.balance if contract.balance is not None else contract.amount
+    
+    # CORRECCIÓN APLICADA: Usamos current_balance para la resta
+    contract.balance = current_balance - payment.amount
 
     db.add(new_payment)
     # No hace falta db.add(contract) porque SQLAlchemy rastrea el cambio automáticamente
@@ -72,9 +73,6 @@ def get_payments_by_contract(
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
     # SEGURIDAD:
-    # - Si es Dueño: Debe ser dueño de la propiedad.
-    # - Si es Inquilino: Debe ser SU contrato.
-    
     if current_user.role == "tenant":
         if contract.tenant_id != current_user.id:
             raise HTTPException(status_code=403, detail="No puedes ver pagos de otro contrato")
