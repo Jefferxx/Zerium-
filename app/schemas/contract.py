@@ -13,7 +13,7 @@ class ContractBase(BaseModel):
 class ContractCreate(ContractBase):
     pass
 
-# --- CLASE PARA DATOS ANIDADOS (NUEVO) ---
+# --- CLASE PARA DATOS ANIDADOS ---
 class UnitInfo(BaseModel):
     unit_number: str
 
@@ -26,9 +26,12 @@ class ContractResponse(ContractBase):
     is_active: bool
     contract_file_url: Optional[str] = None
     
-    # --- CAMPOS NUEVOS ---
-    unit: Optional[UnitInfo] = None      # Traerá info de la unidad
-    tenant: Optional[TenantInfo] = None  # Traerá info del usuario
+    # --- CAMPO NUEVO: BALANCE ---
+    # Esto permitirá ver la deuda actual en Swagger y en el Frontend
+    balance: Optional[float] = None 
+    
+    unit: Optional[UnitInfo] = None      
+    tenant: Optional[TenantInfo] = None  
     
     class Config:
         from_attributes = True
