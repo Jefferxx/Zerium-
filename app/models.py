@@ -3,12 +3,12 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
 from sqlalchemy.sql import func
 from app.database import Base
 
-# --- AQUÍ ESTÁ EL CAMBIO ---
+# --- CORRECCIÓN: Usamos minúsculas en las claves para coincidir con tu Schema ---
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    USER = "user"
-    LANDLORD = "landlord"  # <--- El que faltaba
-    TENANT = "tenant"      # <--- Probablemente lo necesites pronto
+    admin = "admin"       # Antes era ADMIN
+    user = "user"         # Antes era USER
+    landlord = "landlord" # Esto arreglará el AttributeError
+    tenant = "tenant"
 
 class User(Base):
     __tablename__ = "users"
@@ -18,8 +18,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     
-    # El rol por defecto. Si prefieres que sea 'tenant' o 'landlord', cámbialo aquí.
-    role = Column(Enum(UserRole), default=UserRole.USER)
+    # Aquí referenciamos UserRole.user (minúscula)
+    role = Column(Enum(UserRole), default=UserRole.user)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
