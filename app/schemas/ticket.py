@@ -1,39 +1,44 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
+from datetime import datetime
 from enum import Enum
 
+# Definimos los Enums aquí para validación de Pydantic
 class TicketPriority(str, Enum):
     low = "low"
     medium = "medium"
     high = "high"
     emergency = "emergency"
 
-# Eliminamos TicketStatus porque tu DB no lo tiene, usa is_resolved
-# class TicketStatus(str, Enum): ... 
+class TicketStatus(str, Enum):
+    pending = "pending"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    cancelled = "cancelled"
 
+# Datos base
 class TicketBase(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str
     priority: TicketPriority = TicketPriority.medium
+
+# Datos para CREAR (POST)
+class TicketCreate(TicketBase):
     property_id: str
     unit_id: Optional[str] = None
-    photo_url: Optional[str] = None
 
-class TicketCreate(TicketBase):
-    pass
+# Datos para ACTUALIZAR ESTADO (PATCH)
+class TicketStatusUpdate(BaseModel):
+    status: TicketStatus
 
-class TicketUpdate(BaseModel):
-    is_resolved: bool # Usamos booleano directo
-    priority: Optional[TicketPriority] = None
-
+# Datos para RESPONDER (GET)
 class TicketResponse(TicketBase):
     id: str
-    # status: TicketStatus <--- CAMBIAMOS ESTO
-    is_resolved: bool     # <--- POR ESTO (Coincide con DB)
+    property_id: str
     requester_id: str
+    status: TicketStatus
     created_at: datetime
-    # updated_at viene del mixin, pero a veces Pydantic se queja si es null
-    
+    # resolved_at: Optional[datetime] = None 
+
     class Config:
         from_attributes = True

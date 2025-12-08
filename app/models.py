@@ -1,7 +1,7 @@
 """
 MODELOS DE BASE DE DATOS (ORM) - ZERIUM
 ---------------------------------------------------------
-Estructura optimizada para MVP con módulo de Pagos.
+Estructura optimizada para MVP con módulo de Pagos y Mantenimiento Avanzado.
 """
 
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DECIMAL, DateTime, Date, Text, Enum, JSON
@@ -45,6 +45,13 @@ class TicketPriority(str, enum.Enum):
     high = "high"
     emergency = "emergency"
 
+# --- NUEVO ENUM (ÉPICA D) ---
+class TicketStatus(str, enum.Enum):
+    pending = "pending"         # Recibido
+    in_progress = "in_progress" # Trabajando en ello
+    resolved = "resolved"       # Solucionado
+    cancelled = "cancelled"     # Falsa alarma / Cancelado
+
 # ==============================================================================
 # 2. MIXINS
 # ==============================================================================
@@ -77,7 +84,7 @@ class User(Base, TimestampMixin):
     
     properties = relationship("Property", back_populates="owner")
     contracts_as_tenant = relationship("Contract", back_populates="tenant")
-    # audit_logs = relationship("AuditLog", back_populates="user") # Opcional por ahora
+    # audit_logs = relationship("AuditLog", back_populates="user")
 
 class Property(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "properties"
@@ -118,13 +125,12 @@ class Contract(Base, TimestampMixin):
     unit_id = Column(String, ForeignKey("units.id"), nullable=False)
     tenant_id = Column(String, ForeignKey("users.id"), nullable=False)
     
-    start_date = Column(Date, nullable=False) # Cambiado a Date para simplificar
-    end_date = Column(Date, nullable=False)   # Cambiado a Date
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
     payment_day = Column(Integer, default=5)
     amount = Column(DECIMAL(10, 2), nullable=False)
     
-    # --- CAMPO CRÍTICO PARA PAGOS ---
-    balance = Column(DECIMAL(10, 2), default=0.00) # Deuda actual
+    balance = Column(DECIMAL(10, 2), default=0.00)
     
     contract_file_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -133,7 +139,6 @@ class Contract(Base, TimestampMixin):
     tenant = relationship("User", back_populates="contracts_as_tenant")
     payments = relationship("Payment", back_populates="contract")
 
-# --- MODELO DE PAGOS ACTUALIZADO ---
 class Payment(Base, TimestampMixin):
     __tablename__ = "payments"
 
@@ -141,24 +146,34 @@ class Payment(Base, TimestampMixin):
     contract_id = Column(String, ForeignKey("contracts.id"), nullable=False)
     
     amount = Column(DECIMAL(10, 2), nullable=False)
-    payment_date = Column(DateTime, default=datetime.now) # Fecha real del pago
+    payment_date = Column(DateTime, default=datetime.now)
     
-    # Campos descriptivos simples
-    payment_method = Column(String) # "Efectivo", "Transferencia"
-    notes = Column(Text, nullable=True) # "Pago mes Enero"
+    payment_method = Column(String)
+    notes = Column(Text, nullable=True)
 
     contract = relationship("Contract", back_populates="payments")
 
 class MaintenanceTicket(Base, TimestampMixin):
     __tablename__ = "maintenance_tickets"
+
     id = Column(String, primary_key=True, default=generate_uuid)
     property_id = Column(String, ForeignKey("properties.id"), nullable=False)
     unit_id = Column(String, ForeignKey("units.id"), nullable=True) 
     requester_id = Column(String, ForeignKey("users.id"), nullable=False)
+    
     title = Column(String, nullable=False)
     description = Column(Text)
     priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
+    
+    # --- CAMPO NUEVO (ÉPICA D) ---
+    status = Column(Enum(TicketStatus), default=TicketStatus.pending)
+    
+    # Mantenemos por compatibilidad, pero la lógica será 'status'
     is_resolved = Column(Boolean, default=False)
     resolved_at = Column(DateTime, nullable=True)
 
     property = relationship("Property", back_populates="maintenance_tickets")
+    
+    # --- RELACIÓN NUEVA ---
+    # Esto nos permite saber el nombre de quién creó el ticket (ticket.requester.full_name)
+    requester = relationship("User")
