@@ -1,8 +1,9 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
+from datetime import datetime
 from enum import Enum
 
+# Definimos los Enums aquí para validación de Pydantic
 class TicketPriority(str, Enum):
     low = "low"
     medium = "medium"
@@ -10,33 +11,34 @@ class TicketPriority(str, Enum):
     emergency = "emergency"
 
 class TicketStatus(str, Enum):
-    open = "open"
+    pending = "pending"
     in_progress = "in_progress"
     resolved = "resolved"
-    closed = "closed"
+    cancelled = "cancelled"
 
+# Datos base
 class TicketBase(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str
     priority: TicketPriority = TicketPriority.medium
-    property_id: str
-    unit_id: Optional[str] = None # Opcional: el daño puede ser en el pasillo (edificio)
-    photo_url: Optional[str] = None # Para cumplir RF-10 (Evidencia)
 
+# Datos para CREAR (POST)
 class TicketCreate(TicketBase):
-    pass
+    property_id: str
+    unit_id: Optional[str] = None
 
-class TicketUpdate(BaseModel):
-    status: Optional[TicketStatus] = None
-    priority: Optional[TicketPriority] = None
-    technician_notes: Optional[str] = None
+# Datos para ACTUALIZAR ESTADO (PATCH)
+class TicketStatusUpdate(BaseModel):
+    status: TicketStatus
 
+# Datos para RESPONDER (GET)
 class TicketResponse(TicketBase):
     id: str
-    status: TicketStatus
+    property_id: str
     requester_id: str
+    status: TicketStatus  # <--- Usamos el nuevo status
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    
+    # resolved_at: Optional[datetime] = None # Opcional si quieres mostrar cuándo se resolvió
+
     class Config:
         from_attributes = True
