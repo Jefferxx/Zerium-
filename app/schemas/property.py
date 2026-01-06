@@ -13,13 +13,16 @@ class UnitBase(BaseModel):
     bathrooms: Decimal = Field(1.0, ge=0)
     area_m2: Optional[Decimal] = None
     base_price: Decimal = Field(..., gt=0, description="Precio referencial de alquiler")
-    status: UnitStatus = UnitStatus.available
+    
+    # CORRECCIÓN: Usamos 'vacant' para coincidir con el Enum de models.py
+    status: UnitStatus = UnitStatus.vacant 
 
 class UnitCreate(UnitBase):
     pass
 
-# --- NUEVO: Esquema para Editar Unidad ---
+# --- CLASE NUEVA (ESTA FALTABA) ---
 class UnitUpdate(BaseModel):
+    """Permite editar campos individuales de una unidad (todos opcionales)."""
     unit_number: Optional[str] = None
     type: Optional[UnitType] = None
     floor: Optional[int] = None
@@ -30,8 +33,8 @@ class UnitUpdate(BaseModel):
     status: Optional[UnitStatus] = None
 
 class UnitResponse(UnitBase):
-    id: str
-    property_id: str
+    id: int 
+    property_id: int
     
     class Config:
         from_attributes = True
@@ -53,8 +56,8 @@ class PropertyCreate(PropertyBase):
     units: Optional[List[UnitCreate]] = []
 
 class PropertyResponse(PropertyBase):
-    id: str
-    owner_id: str
+    id: int
+    owner_id: int
     # Incluimos las unidades en la respuesta para ver todo el edificio
     units: List[UnitResponse] = []
     

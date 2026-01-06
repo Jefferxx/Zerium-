@@ -1,11 +1,12 @@
+# app/models.py
 import enum
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float, Text, JSON, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
 # =======================
-# 1. ENUMS (Listas de opciones)
+# 1. ENUMS
 # =======================
 
 class UserRole(str, enum.Enum):
@@ -14,7 +15,6 @@ class UserRole(str, enum.Enum):
     landlord = "landlord"
     tenant = "tenant"
 
-# Estos son los que te faltaban y causaban el error:
 class PropertyType(str, enum.Enum):
     apartment = "apartment"
     house = "house"
@@ -26,13 +26,24 @@ class UnitType(str, enum.Enum):
     apartment = "apartment"
 
 class UnitStatus(str, enum.Enum):
-    vacant = "vacant"
+    vacant = "vacant"        # Coincide con schema (antes decías 'available')
     occupied = "occupied"
     maintenance = "maintenance"
 
+class TicketPriority(str, enum.Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+    emergency = "emergency"
+
+class TicketStatus(str, enum.Enum):
+    pending = "pending"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    cancelled = "cancelled"
 
 # =======================
-# 2. MODELOS (Tablas de DB)
+# 2. TABLAS (MODELOS)
 # =======================
 
 class User(Base):
@@ -40,31 +51,42 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    # IMPORTANTE: Tu CRUD usa 'password_hash', no 'hashed_password'
+    password_hash = Column(String, nullable=False) 
+    full_name = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     role = Column(Enum(UserRole), default=UserRole.user)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relación: Un Landlord tiene muchas propiedades
-    properties = relationship("Property", back_populates="landlord")
+    # Relaciones
+    properties = relationship("Property", back_populates="owner")
+    contracts = relationship("Contract", back_populates="tenant")
+    tickets_requested = relationship("MaintenanceTicket", back_populates="requester")
 
 
 class Property(Base):
     __tablename__ = "properties"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True) # Ej: "Edificio Central"
+    name = Column(String, index=True)
+    type = Column(Enum(PropertyType), default=PropertyType.apartment) # CRUD usa 'type'
     address = Column(String)
+    city = Column(String, default="Riobamba")
     description = Column(Text, nullable=True)
-    property_type = Column(Enum(PropertyType), default=PropertyType.apartment)
     
-    # Relación con el Dueño (Landlord)
-    landlord_id = Column(Integer, ForeignKey("users.id"))
-    landlord = relationship("User", back_populates="properties")
+    # Campos geográficos y extras
+    amenities = Column(JSON, default={})
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    is_deleted = Column(Boolean, default=False)
+
+    # Relación con Dueño (Tu CRUD usa 'owner_id', no 'landlord_id')
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="properties")
     
-    # Relación: Una propiedad tiene muchas unidades
     units = relationship("Unit", back_populates="property")
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -75,16 +97,78 @@ class Unit(Base):
     __tablename__ = "units"
 
     id = Column(Integer, primary_key=True, index=True)
-    unit_number = Column(String) # Ej: "A-101"
-    floor = Column(Integer, nullable=True)
-    rent_amount = Column(Float, nullable=True)
+    unit_number = Column(String)
     
-    unit_type = Column(Enum(UnitType), default=UnitType.apartment)
+    # CRUD espera 'type' y 'base_price'
+    type = Column(Enum(UnitType), default=UnitType.apartment) 
+    floor = Column(Integer, nullable=True)
+    bedrooms = Column(Integer, default=1)
+    bathrooms = Column(Float, default=1.0)
+    area_m2 = Column(Float, nullable=True)
+    base_price = Column(Float, nullable=True) # Antes rent_amount
+    
     status = Column(Enum(UnitStatus), default=UnitStatus.vacant)
     
-    # Relación con la Propiedad Padre
     property_id = Column(Integer, ForeignKey("properties.id"))
     property = relationship("Property", back_populates="units")
     
+    contracts = relationship("Contract", back_populates="unit")
+    tickets = relationship("MaintenanceTicket", back_populates="unit")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class Contract(Base):
+    __tablename__ = "contracts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    unit_id = Column(Integer, ForeignKey("units.id"))
+    tenant_id = Column(Integer, ForeignKey("users.id"))
+    
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    amount = Column(Float, nullable=False) # Precio pactado
+    balance = Column(Float, default=0.0)   # Deuda actual
+    payment_day = Column(Integer, default=5)
+    is_active = Column(Boolean, default=True)
+    contract_file_url = Column(String, nullable=True)
+
+    unit = relationship("Unit", back_populates="contracts")
+    tenant = relationship("User", back_populates="contracts")
+    payments = relationship("Payment", back_populates="contract")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"))
+    amount = Column(Float, nullable=False)
+    payment_date = Column(DateTime(timezone=True), server_default=func.now())
+    payment_method = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    contract = relationship("Contract", back_populates="payments")
+
+
+class MaintenanceTicket(Base):
+    __tablename__ = "maintenance_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
+    status = Column(Enum(TicketStatus), default=TicketStatus.pending)
+    
+    property_id = Column(Integer, ForeignKey("properties.id"))
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
+    requester_id = Column(Integer, ForeignKey("users.id"))
+
+    # Compatibilidad Legacy
+    is_resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+    requester = relationship("User", back_populates="tickets_requested")
+    unit = relationship("Unit", back_populates="tickets")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
