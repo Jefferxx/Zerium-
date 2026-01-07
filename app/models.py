@@ -19,6 +19,7 @@ class PropertyType(str, enum.Enum):
     apartment = "apartment"
     house = "house"
     commercial = "commercial"
+    building = "building"
 
 class UnitType(str, enum.Enum):
     room = "room"
