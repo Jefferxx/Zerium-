@@ -26,6 +26,7 @@ class UnitType(str, enum.Enum):
     studio = "studio"
     apartment = "apartment"
     house = "house"       # <--- AGREGADO (Faltaba)
+    store = "store"
 
 class UnitStatus(str, enum.Enum):
     vacant = "vacant"
