@@ -7,14 +7,13 @@ from app import models
 from app.schemas import document as doc_schema
 from app.dependencies import get_current_user
 from app.services.cloudinary_service import upload_file
-from app.models import UserRole 
 
 router = APIRouter(
     prefix="/documents",
     tags=["Documents"]
 )
 
-# 1. SUBIR DOCUMENTO
+# 1. SUBIR DOCUMENTO (Inquilino)
 @router.post("/upload", response_model=doc_schema.DocumentResponse)
 def upload_document(
     document_type: str = Form(...), 
@@ -22,16 +21,13 @@ def upload_document(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Validar tipo de archivo
     if file.content_type not in ["application/pdf", "image/jpeg", "image/png", "image/jpg"]:
         raise HTTPException(status_code=400, detail="Solo PDF, JPG o PNG")
 
-    # Subir a Cloudinary
     upload_result = upload_file(file)
     if not upload_result:
         raise HTTPException(status_code=500, detail="Error al subir a la nube")
 
-    # Guardar en BD
     new_doc = models.UserDocument(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
@@ -46,7 +42,7 @@ def upload_document(
     db.refresh(new_doc)
     return new_doc
 
-# 2. VER MIS DOCUMENTOS
+# 2. VER MIS DOCUMENTOS (Inquilino)
 @router.get("/my-documents", response_model=List[doc_schema.DocumentResponse])
 def get_my_documents(
     db: Session = Depends(get_db),
@@ -54,7 +50,7 @@ def get_my_documents(
 ):
     return db.query(models.UserDocument).filter(models.UserDocument.user_id == current_user.id).all()
 
-# 3. VER DOCUMENTOS DE UN INQUILINO (Solo Landlord)
+# 3. VER DOCUMENTOS DE UN INQUILINO (Dueño)
 @router.get("/user/{user_id}", response_model=List[doc_schema.DocumentResponse])
 def get_tenant_documents(
     user_id: str,
@@ -66,7 +62,7 @@ def get_tenant_documents(
     
     return db.query(models.UserDocument).filter(models.UserDocument.user_id == user_id).all()
 
-# 4. APROBAR O RECHAZAR DOCUMENTO (Solo Landlord)
+# 4. APROBAR O RECHAZAR (Dueño)
 @router.patch("/{document_id}/status", response_model=doc_schema.DocumentResponse)
 def update_document_status(
     document_id: str,
@@ -74,16 +70,13 @@ def update_document_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # 1. Validar Permiso
     if current_user.role != models.UserRole.landlord:
         raise HTTPException(status_code=403, detail="Solo los dueños pueden verificar documentos")
 
-    # 2. Buscar Documento
     doc = db.query(models.UserDocument).filter(models.UserDocument.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
-    # 3. Actualizar
     doc.status = status_update.status
     if status_update.rejection_reason:
         doc.rejection_reason = status_update.rejection_reason

@@ -16,7 +16,7 @@ class DocumentResponse(DocumentBase):
 
     class Config:
         from_attributes = True
-        
+
 class DocumentStatusUpdate(BaseModel):
     status: DocumentStatus
     rejection_reason: Optional[str] = None
