@@ -11,7 +11,7 @@ from app.routers import (
     auth, 
     properties, 
     contracts, 
-    payments, # <--- Aquí está, una sola vez
+    payments, 
     tickets, 
     dashboard
 )
@@ -25,11 +25,14 @@ app = FastAPI(
     description="Backend profesional para la gestión inmobiliaria Zerium"
 )
 
-# --- CONFIGURACIÓN DE CORS PARA PRODUCCIÓN ---
+# --- CONFIGURACIÓN DE CORS PARA PRODUCCIÓN (CORREGIDO) ---
 origins = [
     "http://localhost:5173",    # Tu entorno local
     "http://127.0.0.1:5173",    # Tu entorno local (IP)
-    "*"                         # Permitir todo
+    # URL específica de tu error en Vercel:
+    "https://zerium-frontend-9ocul695u-jeffersonjordan2004-9065s-projects.vercel.app", 
+    # Agrega también tu dominio principal de Vercel (por si acaso):
+    "https://zerium-frontend.vercel.app" 
 ]
 
 app.add_middleware(
@@ -46,7 +49,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(properties.router)
 app.include_router(contracts.router)
-app.include_router(payments.router) # <--- Una sola vez
+app.include_router(payments.router)
 app.include_router(tickets.router)
 app.include_router(dashboard.router)
 
