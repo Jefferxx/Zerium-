@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
-from datetime import datetime  # <--- IMPORTANTE: Necesario para las fechas de pago
+from datetime import datetime
 from app.models import PropertyType, UnitType, UnitStatus
 
 # =======================
@@ -32,8 +32,8 @@ class UnitUpdate(BaseModel):
     status: Optional[UnitStatus] = None
 
 class UnitResponse(UnitBase):
-    id: str  # TIPO STRING (Para UUID)
-    property_id: str # TIPO STRING
+    id: str
+    property_id: str
     
     class Config:
         from_attributes = True
@@ -56,24 +56,24 @@ class PropertyCreate(PropertyBase):
     units: Optional[List[UnitCreate]] = []
 
 class PropertyResponse(PropertyBase):
-    id: str        # TIPO STRING (Para UUID)
-    owner_id: str  # TIPO STRING
+    id: str
+    owner_id: str
     units: List[UnitResponse] = []
     
     class Config:
         from_attributes = True
 
 # =======================
-# PAGOS (NUEVO MÓDULO)
+# PAGOS (Asegúrate de copiar hasta aquí abajo)
 # =======================
 
 class PaymentBase(BaseModel):
     amount: Decimal = Field(..., gt=0, description="Monto pagado")
     payment_method: str = Field(..., description="Ej: Transferencia, Efectivo, Depósito")
-    notes: Optional[str] = None # Aquí el inquilino puede poner "Transferencia #12345"
+    notes: Optional[str] = None 
 
 class PaymentCreate(PaymentBase):
-    contract_id: str # Vinculamos el pago a un contrato específico (UUID)
+    contract_id: str
 
 class PaymentResponse(PaymentBase):
     id: str
