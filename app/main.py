@@ -16,7 +16,7 @@ from app.routers import (
     dashboard
 )
 
-# Crear tablas
+# Crear tablas en la base de datos
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -25,21 +25,23 @@ app = FastAPI(
     description="Backend profesional para la gestión inmobiliaria Zerium"
 )
 
-# --- CONFIGURACIÓN DE CORS (SOLUCIÓN DEFINITIVA) ---
-# Usamos allow_origin_regex para permitir:
-# 1. Cualquier subdominio de Vercel de tu proyecto (https://zerium-frontend-....vercel.app)
-# 2. Localhost en cualquier puerto (para desarrollo)
-# 3. La URL oficial de producción
-origin_regex = r"https://zerium-frontend.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+"
+# --- CONFIGURACIÓN DE CORS (MODO LISTA EXPLÍCITA - SOLUCIÓN SEGURA) ---
+# Definimos exactamente quién puede conectarse para evitar bloqueos
+origins = [
+    "http://localhost:5173",       # Desarrollo local (Vite)
+    "http://127.0.0.1:5173",       # Desarrollo local (IP)
+    "https://zerium-frontend.vercel.app",  # <--- Tu dominio principal de Vercel
+    "https://zerium-frontend-9ocul695u-jeffersonjordan2004-9065s-projects.vercel.app" # <--- Tu URL específica de despliegue
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=origin_regex,  # <--- AQUÍ ESTÁ EL CAMBIO CLAVE
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,      # Usamos la lista exacta en lugar de regex
+    allow_credentials=True,     # Permite cookies y tokens
+    allow_methods=["*"],        # Permite todos los métodos (GET, POST, PUT, DELETE...)
+    allow_headers=["*"],        # Permite todos los headers
 )
-# ---------------------------------------------------
+# -----------------------------------------------------------------------
 
 # Inclusión de Routers
 app.include_router(auth.router)
@@ -57,6 +59,7 @@ def read_root():
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
     try:
+        # Prueba simple de conexión a la base de datos
         db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "Conectada exitosamente a Supabase ✅"}
     except Exception as e:
