@@ -3,10 +3,9 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Foreign
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-import uuid # Opcional, por si necesitas generar UUIDs por defecto en el futuro
 
 # =======================
-# 1. ENUMS (CORREGIDOS)
+# 1. ENUMS (ACTUALIZADOS CON TUS RESULTADOS SQL)
 # =======================
 
 class UserRole(str, enum.Enum):
@@ -19,20 +18,20 @@ class PropertyType(str, enum.Enum):
     apartment = "apartment"
     house = "house"
     commercial = "commercial"
-    building = "building" # <--- AGREGADO (Faltaba)
+    building = "building"  # <--- Confirmado por tu SQL
 
 class UnitType(str, enum.Enum):
     room = "room"
     studio = "studio"
     apartment = "apartment"
-    house = "house"       # <--- AGREGADO (Faltaba)
-    store = "store"
+    house = "house"        # <--- Confirmado por tu SQL
+    store = "store"        # <--- ¡NUEVO! Confirmado por tu SQL (Esto arregla el error actual)
 
 class UnitStatus(str, enum.Enum):
     vacant = "vacant"
     occupied = "occupied"
     maintenance = "maintenance"
-    available = "available" # <--- AGREGADO (Faltaba)
+    available = "available" # <--- Confirmado por tu SQL
 
 class TicketPriority(str, enum.Enum):
     low = "low"
@@ -53,7 +52,7 @@ class TicketStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    # IDs cambiados a String para soportar los UUIDs de tu base de datos
     id = Column(String, primary_key=True, index=True)
     
     email = Column(String, unique=True, index=True, nullable=False)
@@ -75,9 +74,7 @@ class User(Base):
 class Property(Base):
     __tablename__ = "properties"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
     id = Column(String, primary_key=True, index=True)
-    
     name = Column(String, index=True)
     type = Column(Enum(PropertyType), default=PropertyType.apartment)
     address = Column(String)
@@ -89,7 +86,6 @@ class Property(Base):
     longitude = Column(Float, nullable=True)
     is_deleted = Column(Boolean, default=False)
 
-    # Relación con Dueño (FK también debe ser String)
     owner_id = Column(String, ForeignKey("users.id"))
     owner = relationship("User", back_populates="properties")
     
@@ -102,9 +98,7 @@ class Property(Base):
 class Unit(Base):
     __tablename__ = "units"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
     id = Column(String, primary_key=True, index=True)
-    
     unit_number = Column(String)
     type = Column(Enum(UnitType), default=UnitType.apartment) 
     floor = Column(Integer, nullable=True)
@@ -115,7 +109,6 @@ class Unit(Base):
     
     status = Column(Enum(UnitStatus), default=UnitStatus.vacant)
     
-    # FK debe ser String
     property_id = Column(String, ForeignKey("properties.id"))
     property = relationship("Property", back_populates="units")
     
@@ -128,10 +121,7 @@ class Unit(Base):
 class Contract(Base):
     __tablename__ = "contracts"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
     id = Column(String, primary_key=True, index=True)
-    
-    # FKs deben ser String
     unit_id = Column(String, ForeignKey("units.id"))
     tenant_id = Column(String, ForeignKey("users.id"))
     
@@ -151,12 +141,8 @@ class Contract(Base):
 class Payment(Base):
     __tablename__ = "payments"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
     id = Column(String, primary_key=True, index=True)
-    
-    # FK debe ser String
     contract_id = Column(String, ForeignKey("contracts.id"))
-    
     amount = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True), server_default=func.now())
     payment_method = Column(String, nullable=True)
@@ -168,15 +154,12 @@ class Payment(Base):
 class MaintenanceTicket(Base):
     __tablename__ = "maintenance_tickets"
 
-    # CORRECCIÓN: Cambiado a String para soportar UUIDs
     id = Column(String, primary_key=True, index=True)
-    
     title = Column(String, nullable=False)
     description = Column(Text)
     priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
     status = Column(Enum(TicketStatus), default=TicketStatus.pending)
     
-    # FKs deben ser String
     property_id = Column(String, ForeignKey("properties.id"))
     unit_id = Column(String, ForeignKey("units.id"), nullable=True)
     requester_id = Column(String, ForeignKey("users.id"))
