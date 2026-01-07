@@ -4,7 +4,7 @@ from decimal import Decimal
 from app.models import PropertyType, UnitType, UnitStatus
 
 # =======================
-# UNIDADES (Departamentos/Locales)
+# UNIDADES
 # =======================
 
 class UnitBase(BaseModel):
@@ -15,15 +15,12 @@ class UnitBase(BaseModel):
     bathrooms: Decimal = Field(1.0, ge=0)
     area_m2: Optional[Decimal] = None
     base_price: Decimal = Field(..., gt=0, description="Precio referencial de alquiler")
-    
-    # Se usa el Enum importado de models.py
     status: UnitStatus = UnitStatus.vacant 
 
 class UnitCreate(UnitBase):
     pass
 
 class UnitUpdate(BaseModel):
-    """Permite editar campos individuales de una unidad (todos opcionales)."""
     unit_number: Optional[str] = None
     type: Optional[UnitType] = None
     floor: Optional[int] = None
@@ -34,15 +31,14 @@ class UnitUpdate(BaseModel):
     status: Optional[UnitStatus] = None
 
 class UnitResponse(UnitBase):
-    # CORRECCIÓN IMPORTANTE: Cambiado de int a str para soportar UUIDs
-    id: str 
-    property_id: str
+    id: str  # <--- TIPO STRING (Para UUID)
+    property_id: str # <--- TIPO STRING
     
     class Config:
         from_attributes = True
 
 # =======================
-# PROPIEDADES (Edificios/Casas)
+# PROPIEDADES
 # =======================
 
 class PropertyBase(BaseModel):
@@ -56,14 +52,11 @@ class PropertyBase(BaseModel):
     longitude: Optional[Decimal] = None
 
 class PropertyCreate(PropertyBase):
-    # Opcional: Permitir crear unidades al mismo tiempo que la propiedad
     units: Optional[List[UnitCreate]] = []
 
 class PropertyResponse(PropertyBase):
-    # CORRECCIÓN IMPORTANTE: Cambiado de int a str para soportar UUIDs
-    id: str
-    owner_id: str
-    # Incluimos las unidades en la respuesta para ver todo el edificio
+    id: str        # <--- TIPO STRING (Para UUID)
+    owner_id: str  # <--- TIPO STRING
     units: List[UnitResponse] = []
     
     class Config:

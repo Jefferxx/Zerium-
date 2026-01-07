@@ -1,11 +1,12 @@
 import enum
+import uuid # <--- IMPORTANTE: Importamos la librería para generar IDs
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float, Text, JSON, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
 # =======================
-# 1. ENUMS (ACTUALIZADOS CON TUS RESULTADOS SQL)
+# 1. ENUMS
 # =======================
 
 class UserRole(str, enum.Enum):
@@ -18,20 +19,20 @@ class PropertyType(str, enum.Enum):
     apartment = "apartment"
     house = "house"
     commercial = "commercial"
-    building = "building"  # <--- Confirmado por tu SQL
+    building = "building"
 
 class UnitType(str, enum.Enum):
     room = "room"
     studio = "studio"
     apartment = "apartment"
-    house = "house"        # <--- Confirmado por tu SQL
-    store = "store"        # <--- ¡NUEVO! Confirmado por tu SQL (Esto arregla el error actual)
+    house = "house"
+    store = "store"
 
 class UnitStatus(str, enum.Enum):
     vacant = "vacant"
     occupied = "occupied"
     maintenance = "maintenance"
-    available = "available" # <--- Confirmado por tu SQL
+    available = "available"
 
 class TicketPriority(str, enum.Enum):
     low = "low"
@@ -52,8 +53,8 @@ class TicketStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    # IDs cambiados a String para soportar los UUIDs de tu base de datos
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: Agregamos default=lambda: str(uuid.uuid4())
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False) 
@@ -74,7 +75,9 @@ class User(Base):
 class Property(Base):
     __tablename__ = "properties"
 
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: ID automático
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    
     name = Column(String, index=True)
     type = Column(Enum(PropertyType), default=PropertyType.apartment)
     address = Column(String)
@@ -98,7 +101,9 @@ class Property(Base):
 class Unit(Base):
     __tablename__ = "units"
 
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: ID automático
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    
     unit_number = Column(String)
     type = Column(Enum(UnitType), default=UnitType.apartment) 
     floor = Column(Integer, nullable=True)
@@ -121,7 +126,9 @@ class Unit(Base):
 class Contract(Base):
     __tablename__ = "contracts"
 
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: ID automático
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    
     unit_id = Column(String, ForeignKey("units.id"))
     tenant_id = Column(String, ForeignKey("users.id"))
     
@@ -141,7 +148,9 @@ class Contract(Base):
 class Payment(Base):
     __tablename__ = "payments"
 
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: ID automático
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    
     contract_id = Column(String, ForeignKey("contracts.id"))
     amount = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True), server_default=func.now())
@@ -154,7 +163,9 @@ class Payment(Base):
 class MaintenanceTicket(Base):
     __tablename__ = "maintenance_tickets"
 
-    id = Column(String, primary_key=True, index=True)
+    # CORRECCIÓN CLAVE: ID automático
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    
     title = Column(String, nullable=False)
     description = Column(Text)
     priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
