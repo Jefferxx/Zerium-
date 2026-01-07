@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import engine, Base, get_db
 from app import models 
+from app.routers import documents # <--- Agregar import
 
 # Importación de routers
 from app.routers import (
@@ -51,6 +52,7 @@ app.include_router(contracts.router)
 app.include_router(payments.router)
 app.include_router(tickets.router)
 app.include_router(dashboard.router)
+app.include_router(documents.router)
 
 @app.get("/")
 def read_root():

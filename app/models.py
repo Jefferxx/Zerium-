@@ -1,12 +1,12 @@
 import enum
-import uuid # <--- IMPORTANTE: Importamos la librería para generar IDs
+import uuid 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float, Text, JSON, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
 # =======================
-# 1. ENUMS
+# 1. ENUMS (Todos juntos al inicio)
 # =======================
 
 class UserRole(str, enum.Enum):
@@ -46,6 +46,19 @@ class TicketStatus(str, enum.Enum):
     resolved = "resolved"
     cancelled = "cancelled"
 
+# --- NUEVOS ENUMS PARA DOCUMENTOS ---
+class DocumentType(str, enum.Enum):
+    cedula = "cedula"
+    antecedentes = "antecedentes" # Récord Policial
+    buro_credito = "buro_credito" # Buró de crédito
+    rol_pagos = "rol_pagos"       # Comprobante de ingresos
+    otro = "otro"
+
+class DocumentStatus(str, enum.Enum):
+    pending = "pending"   # Subido, esperando revisión
+    verified = "verified" # Aprobado por el dueño/admin
+    rejected = "rejected" # Rechazado (foto borrosa, etc.)
+
 # =======================
 # 2. TABLAS (MODELOS)
 # =======================
@@ -53,7 +66,6 @@ class TicketStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    # CORRECCIÓN CLAVE: Agregamos default=lambda: str(uuid.uuid4())
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     
     email = Column(String, unique=True, index=True, nullable=False)
@@ -70,20 +82,20 @@ class User(Base):
     properties = relationship("Property", back_populates="owner")
     contracts = relationship("Contract", back_populates="tenant")
     tickets_requested = relationship("MaintenanceTicket", back_populates="requester")
+    
+    # NUEVA RELACIÓN
+    documents = relationship("UserDocument", back_populates="user")
 
 
 class Property(Base):
     __tablename__ = "properties"
 
-    # CORRECCIÓN CLAVE: ID automático
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    
     name = Column(String, index=True)
     type = Column(Enum(PropertyType), default=PropertyType.apartment)
     address = Column(String)
     city = Column(String, default="Riobamba")
     description = Column(Text, nullable=True)
-    
     amenities = Column(JSON, default={})
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
@@ -91,7 +103,6 @@ class Property(Base):
 
     owner_id = Column(String, ForeignKey("users.id"))
     owner = relationship("User", back_populates="properties")
-    
     units = relationship("Unit", back_populates="property")
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -101,9 +112,7 @@ class Property(Base):
 class Unit(Base):
     __tablename__ = "units"
 
-    # CORRECCIÓN CLAVE: ID automático
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    
     unit_number = Column(String)
     type = Column(Enum(UnitType), default=UnitType.apartment) 
     floor = Column(Integer, nullable=True)
@@ -111,7 +120,6 @@ class Unit(Base):
     bathrooms = Column(Float, default=1.0)
     area_m2 = Column(Float, nullable=True)
     base_price = Column(Float, nullable=True)
-    
     status = Column(Enum(UnitStatus), default=UnitStatus.vacant)
     
     property_id = Column(String, ForeignKey("properties.id"))
@@ -126,12 +134,9 @@ class Unit(Base):
 class Contract(Base):
     __tablename__ = "contracts"
 
-    # CORRECCIÓN CLAVE: ID automático
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    
     unit_id = Column(String, ForeignKey("units.id"))
     tenant_id = Column(String, ForeignKey("users.id"))
-    
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
     amount = Column(Float, nullable=False)
@@ -148,9 +153,7 @@ class Contract(Base):
 class Payment(Base):
     __tablename__ = "payments"
 
-    # CORRECCIÓN CLAVE: ID automático
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    
     contract_id = Column(String, ForeignKey("contracts.id"))
     amount = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True), server_default=func.now())
@@ -163,9 +166,7 @@ class Payment(Base):
 class MaintenanceTicket(Base):
     __tablename__ = "maintenance_tickets"
 
-    # CORRECCIÓN CLAVE: ID automático
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    
     title = Column(String, nullable=False)
     description = Column(Text)
     priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
@@ -182,3 +183,21 @@ class MaintenanceTicket(Base):
     unit = relationship("Unit", back_populates="tickets")
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# --- NUEVA TABLA: DOCUMENTOS DE USUARIO ---
+class UserDocument(Base):
+    __tablename__ = "user_documents"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"))
+    
+    document_type = Column(Enum(DocumentType), default=DocumentType.otro)
+    file_url = Column(String, nullable=False) # URL de Cloudinary
+    public_id = Column(String, nullable=True) # ID para borrar en Cloudinary
+    
+    status = Column(Enum(DocumentStatus), default=DocumentStatus.pending)
+    rejection_reason = Column(String, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="documents")
