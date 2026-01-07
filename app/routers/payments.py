@@ -4,7 +4,7 @@ from typing import List
 import uuid
 from app.database import get_db
 from app import models, schemas
-from app.routers.auth import get_current_user # Ajusta si tu función está en otro lado
+from app.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/payments",
