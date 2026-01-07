@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app.database import engine, Base, get_db
 from app import models 
 
-# Importación limpia de todos los routers
+# Importación de routers
 from app.routers import (
     users, 
     auth, 
@@ -25,24 +25,21 @@ app = FastAPI(
     description="Backend profesional para la gestión inmobiliaria Zerium"
 )
 
-# --- CONFIGURACIÓN DE CORS PARA PRODUCCIÓN (CORREGIDO) ---
-origins = [
-    "http://localhost:5173",    # Tu entorno local
-    "http://127.0.0.1:5173",    # Tu entorno local (IP)
-    # URL específica de tu error en Vercel:
-    "https://zerium-frontend-9ocul695u-jeffersonjordan2004-9065s-projects.vercel.app", 
-    # Agrega también tu dominio principal de Vercel (por si acaso):
-    "https://zerium-frontend.vercel.app" 
-]
+# --- CONFIGURACIÓN DE CORS (SOLUCIÓN DEFINITIVA) ---
+# Usamos allow_origin_regex para permitir:
+# 1. Cualquier subdominio de Vercel de tu proyecto (https://zerium-frontend-....vercel.app)
+# 2. Localhost en cualquier puerto (para desarrollo)
+# 3. La URL oficial de producción
+origin_regex = r"https://zerium-frontend.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,      
+    allow_origin_regex=origin_regex,  # <--- AQUÍ ESTÁ EL CAMBIO CLAVE
     allow_credentials=True,
-    allow_methods=["*"],        
-    allow_headers=["*"],        
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# ---------------------------------------------
+# ---------------------------------------------------
 
 # Inclusión de Routers
 app.include_router(auth.router)
