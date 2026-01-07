@@ -1,12 +1,12 @@
-# app/models.py
 import enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey, Float, Text, JSON, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+import uuid # Opcional, por si necesitas generar UUIDs por defecto en el futuro
 
 # =======================
-# 1. ENUMS
+# 1. ENUMS (CORREGIDOS)
 # =======================
 
 class UserRole(str, enum.Enum):
@@ -19,17 +19,19 @@ class PropertyType(str, enum.Enum):
     apartment = "apartment"
     house = "house"
     commercial = "commercial"
-    building = "building"
+    building = "building" # <--- AGREGADO (Faltaba)
 
 class UnitType(str, enum.Enum):
     room = "room"
     studio = "studio"
     apartment = "apartment"
+    house = "house"       # <--- AGREGADO (Faltaba)
 
 class UnitStatus(str, enum.Enum):
-    vacant = "vacant"        # Coincide con schema (antes decías 'available')
+    vacant = "vacant"
     occupied = "occupied"
     maintenance = "maintenance"
+    available = "available" # <--- AGREGADO (Faltaba)
 
 class TicketPriority(str, enum.Enum):
     low = "low"
@@ -50,9 +52,10 @@ class TicketStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
+    
     email = Column(String, unique=True, index=True, nullable=False)
-    # IMPORTANTE: Tu CRUD usa 'password_hash', no 'hashed_password'
     password_hash = Column(String, nullable=False) 
     full_name = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
@@ -71,21 +74,22 @@ class User(Base):
 class Property(Base):
     __tablename__ = "properties"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
+    
     name = Column(String, index=True)
-    type = Column(Enum(PropertyType), default=PropertyType.apartment) # CRUD usa 'type'
+    type = Column(Enum(PropertyType), default=PropertyType.apartment)
     address = Column(String)
     city = Column(String, default="Riobamba")
     description = Column(Text, nullable=True)
     
-    # Campos geográficos y extras
     amenities = Column(JSON, default={})
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     is_deleted = Column(Boolean, default=False)
 
-    # Relación con Dueño (Tu CRUD usa 'owner_id', no 'landlord_id')
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    # Relación con Dueño (FK también debe ser String)
+    owner_id = Column(String, ForeignKey("users.id"))
     owner = relationship("User", back_populates="properties")
     
     units = relationship("Unit", back_populates="property")
@@ -97,20 +101,21 @@ class Property(Base):
 class Unit(Base):
     __tablename__ = "units"
 
-    id = Column(Integer, primary_key=True, index=True)
-    unit_number = Column(String)
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
     
-    # CRUD espera 'type' y 'base_price'
+    unit_number = Column(String)
     type = Column(Enum(UnitType), default=UnitType.apartment) 
     floor = Column(Integer, nullable=True)
     bedrooms = Column(Integer, default=1)
     bathrooms = Column(Float, default=1.0)
     area_m2 = Column(Float, nullable=True)
-    base_price = Column(Float, nullable=True) # Antes rent_amount
+    base_price = Column(Float, nullable=True)
     
     status = Column(Enum(UnitStatus), default=UnitStatus.vacant)
     
-    property_id = Column(Integer, ForeignKey("properties.id"))
+    # FK debe ser String
+    property_id = Column(String, ForeignKey("properties.id"))
     property = relationship("Property", back_populates="units")
     
     contracts = relationship("Contract", back_populates="unit")
@@ -122,14 +127,17 @@ class Unit(Base):
 class Contract(Base):
     __tablename__ = "contracts"
 
-    id = Column(Integer, primary_key=True, index=True)
-    unit_id = Column(Integer, ForeignKey("units.id"))
-    tenant_id = Column(Integer, ForeignKey("users.id"))
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
+    
+    # FKs deben ser String
+    unit_id = Column(String, ForeignKey("units.id"))
+    tenant_id = Column(String, ForeignKey("users.id"))
     
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
-    amount = Column(Float, nullable=False) # Precio pactado
-    balance = Column(Float, default=0.0)   # Deuda actual
+    amount = Column(Float, nullable=False)
+    balance = Column(Float, default=0.0)
     payment_day = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)
     contract_file_url = Column(String, nullable=True)
@@ -142,8 +150,12 @@ class Contract(Base):
 class Payment(Base):
     __tablename__ = "payments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    contract_id = Column(Integer, ForeignKey("contracts.id"))
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
+    
+    # FK debe ser String
+    contract_id = Column(String, ForeignKey("contracts.id"))
+    
     amount = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True), server_default=func.now())
     payment_method = Column(String, nullable=True)
@@ -155,17 +167,19 @@ class Payment(Base):
 class MaintenanceTicket(Base):
     __tablename__ = "maintenance_tickets"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # CORRECCIÓN: Cambiado a String para soportar UUIDs
+    id = Column(String, primary_key=True, index=True)
+    
     title = Column(String, nullable=False)
     description = Column(Text)
     priority = Column(Enum(TicketPriority), default=TicketPriority.medium)
     status = Column(Enum(TicketStatus), default=TicketStatus.pending)
     
-    property_id = Column(Integer, ForeignKey("properties.id"))
-    unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
-    requester_id = Column(Integer, ForeignKey("users.id"))
+    # FKs deben ser String
+    property_id = Column(String, ForeignKey("properties.id"))
+    unit_id = Column(String, ForeignKey("units.id"), nullable=True)
+    requester_id = Column(String, ForeignKey("users.id"))
 
-    # Compatibilidad Legacy
     is_resolved = Column(Boolean, default=False)
     resolved_at = Column(DateTime, nullable=True)
 
