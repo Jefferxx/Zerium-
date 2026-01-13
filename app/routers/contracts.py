@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_ 
 from typing import List
 from app.database import get_db
-from app.models import Contract, Property, Unit, User, ContractStatus # <--- IMPORTAR STATUS
+# Importamos modelos y Enums necesarios
+from app.models import Contract, Property, Unit, User, ContractStatus, UserDocument, DocumentStatus
 from app.schemas import contract as contract_schema
 from app.dependencies import get_current_user
 
@@ -16,17 +17,15 @@ router = APIRouter(
 @router.get("/", response_model=List[contract_schema.ContractResponse])
 def get_contracts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role == "landlord":
-        # Landlord ve todos los contratos de sus propiedades
         return db.query(Contract).join(Unit).join(Property).filter(
             Property.owner_id == current_user.id
         ).all()
     elif current_user.role == "tenant":
-        # Inquilino ve solo sus contratos
         return db.query(Contract).filter(Contract.tenant_id == current_user.id).all()
     else:
         return []
 
-# 2. CREAR CONTRATO (CON VALIDACIÓN RF-06 Y ESTADO PENDING)
+# 2. CREAR CONTRATO
 @router.post("/", response_model=contract_schema.ContractResponse, status_code=status.HTTP_201_CREATED)
 def create_contract(
     contract: contract_schema.ContractCreate, 
@@ -47,10 +46,10 @@ def create_contract(
         raise HTTPException(status_code=404, detail="Unidad no encontrada o no te pertenece")
 
     # C. VALIDACIÓN RF-06 ACTUALIZADA
-    # Verificamos solapamiento con contratos que estén ACTIVOS o PENDIENTES
+    # Verificamos solapamiento con contratos Activos, Pendientes o Firmados por Inquilino
     overlapping_contract = db.query(Contract).filter(
         Contract.unit_id == contract.unit_id, 
-        Contract.status.in_([ContractStatus.active, ContractStatus.pending]), # <--- CAMBIO CRÍTICO
+        Contract.status.in_([ContractStatus.active, ContractStatus.pending, ContractStatus.signed_by_tenant]), 
         or_(
             and_(
                 Contract.start_date <= contract.end_date,
@@ -68,15 +67,12 @@ def create_contract(
     # D. Crear el Contrato
     contract_data = contract.model_dump()
     
-    # Creamos la instancia DB, inicializando status PENDING y desactivado
     new_contract = Contract(
         **contract_data, 
         balance=contract.amount,
         status=ContractStatus.pending,
         is_active=False
     )
-    
-    # NOTA: No marcamos la unidad como 'occupied' todavía. Eso sucede al firmar.
     
     db.add(new_contract)
     db.commit()
@@ -86,12 +82,10 @@ def create_contract(
 # 3. OBTENER UN SOLO CONTRATO
 @router.get("/{id}", response_model=contract_schema.ContractResponse)
 def get_contract(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Buscar el contrato por ID
     contract = db.query(Contract).filter(Contract.id == id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
-    # VALIDAR PERMISOS
     if current_user.role == "landlord":
         is_owner = db.query(Property).join(Unit).filter(
             Unit.id == contract.unit_id,
@@ -106,28 +100,71 @@ def get_contract(id: str, db: Session = Depends(get_db), current_user: User = De
 
     return contract
 
-# 4. FIRMAR CONTRATO (NUEVO ENDPOINT)
+# 4. FIRMAR CONTRATO (INQUILINO)
 @router.post("/{contract_id}/sign", response_model=contract_schema.ContractResponse)
 def sign_contract(contract_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    El inquilino acepta el contrato. Pasa de 'pending' a 'active'.
+    Paso 1: El inquilino firma. Requiere documentos verificados.
+    Cambia estado a 'signed_by_tenant'.
     """
     contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
-    # Solo el inquilino asignado puede firmar
     if contract.tenant_id != current_user.id:
         raise HTTPException(status_code=403, detail="No eres el inquilino de este contrato")
 
     if contract.status != ContractStatus.pending:
         raise HTTPException(status_code=400, detail="El contrato no está pendiente de firma")
 
-    # ACTIVACIÓN
+    # --- NUEVA VALIDACIÓN: Verificar Documentos ---
+    # Buscamos si el usuario tiene AL MENOS UN documento verificado
+    verified_docs = db.query(UserDocument).filter(
+        UserDocument.user_id == current_user.id,
+        UserDocument.status == DocumentStatus.verified
+    ).count()
+
+    if verified_docs == 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Debes tener tus documentos de identidad APROBADOS por el dueño antes de firmar."
+        )
+
+    # CAMBIO DE ESTADO
+    contract.status = ContractStatus.signed_by_tenant
+    contract.is_active = False # Aún no está activo
+    
+    db.commit()
+    db.refresh(contract)
+    return contract
+
+# 5. FINALIZAR CONTRATO (DUEÑO)
+@router.post("/{contract_id}/finalize", response_model=contract_schema.ContractResponse)
+def finalize_contract(contract_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Paso 2: El dueño firma. Activa el contrato.
+    """
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contrato no encontrado")
+
+    # Verificar que sea el dueño de la propiedad
+    is_owner = db.query(Property).join(Unit).filter(
+        Unit.id == contract.unit_id,
+        Property.owner_id == current_user.id
+    ).first()
+    
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="No tienes permiso para finalizar este contrato")
+
+    if contract.status != ContractStatus.signed_by_tenant:
+        raise HTTPException(status_code=400, detail="El contrato debe ser firmado primero por el inquilino")
+
+    # ACTIVACIÓN FINAL
     contract.status = ContractStatus.active
     contract.is_active = True
     
-    # Actualizar estado de la unidad a ocupado
+    # Ahora sí ocupamos la unidad
     unit = db.query(Unit).filter(Unit.id == contract.unit_id).first()
     if unit:
         unit.status = "occupied"

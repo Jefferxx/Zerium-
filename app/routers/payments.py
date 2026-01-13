@@ -4,7 +4,6 @@ from typing import List
 import uuid
 from app.database import get_db
 from app import models
-# CORRECCIÓN: Importamos específicamente el esquema de pago
 from app.schemas import payment as payment_schema 
 from app.dependencies import get_current_user
 
@@ -40,6 +39,22 @@ def create_payment(
     else:
         raise HTTPException(status_code=403, detail="Rol no autorizado para pagos")
 
+    # --- VALIDACIÓN FINANCIERA (NUEVO BLOQUE) ---
+    
+    # Calculamos la deuda actual. Si balance es None, es porque es el primer pago (deuda total)
+    current_debt = contract.balance if contract.balance is not None else contract.amount
+
+    # 1. Si ya no debe nada
+    if current_debt <= 0:
+        raise HTTPException(status_code=400, detail="¡Este contrato ya está pagado! No tienes deuda pendiente.")
+
+    # 2. Si intenta pagar más de lo que debe (con un margen de error de 1 centavo por redondeo)
+    if float(payment.amount) > (float(current_debt) + 0.01):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"El monto excede la deuda actual. Solo debes: ${current_debt}"
+        )
+
     # --- TRANSACCIÓN FINANCIERA ---
     new_payment = models.Payment(
         id=str(uuid.uuid4()),
@@ -50,8 +65,7 @@ def create_payment(
     )
     
     # Actualizar el Balance
-    current_balance = contract.balance if contract.balance is not None else contract.amount
-    contract.balance = float(current_balance) - float(payment.amount)
+    contract.balance = float(current_debt) - float(payment.amount)
 
     db.add(new_payment)
     db.commit()
@@ -65,9 +79,6 @@ def get_my_payments_history(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """
-    Devuelve todos los pagos relacionados al usuario logueado.
-    """
     if current_user.role == models.UserRole.tenant:
         payments = db.query(models.Payment).join(models.Contract).filter(
             models.Contract.tenant_id == current_user.id

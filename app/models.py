@@ -61,10 +61,11 @@ class DocumentStatus(str, enum.Enum):
 
 # --- NUEVO ENUM PARA CONTRATOS ---
 class ContractStatus(str, enum.Enum):
-    pending = "pending"       # Creado, falta firma del inquilino
-    active = "active"         # Firmado y vigente
-    terminated = "terminated" # Finalizado
-    rejected = "rejected"     # Inquilino rechazó
+    pending = "pending"             # Creado, falta firma del inquilino
+    signed_by_tenant = "signed_by_tenant" # <--- NUEVO: Inquilino firmó, falta dueño
+    active = "active"               # Ambos firmaron, contrato vigente
+    terminated = "terminated"       # Finalizado
+    rejected = "rejected"           # Inquilino rechazó
 
 # =======================
 # 2. TABLAS (MODELOS)
@@ -84,6 +85,8 @@ class User(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    is_verified = Column(Boolean, default=False) # <--- AGREGA ESTA LÍNEA
 
     # Relaciones
     properties = relationship("Property", back_populates="owner")
@@ -151,8 +154,8 @@ class Contract(Base):
     payment_day = Column(Integer, default=5)
     
     # --- CAMBIOS DE ESTADO ---
-    is_active = Column(Boolean, default=False) # Ahora nace inactivo
-    status = Column(Enum(ContractStatus), default=ContractStatus.pending) # Nuevo campo status
+    is_active = Column(Boolean, default=False) 
+    status = Column(Enum(ContractStatus), default=ContractStatus.pending)
     # -------------------------
 
     contract_file_url = Column(String, nullable=True)

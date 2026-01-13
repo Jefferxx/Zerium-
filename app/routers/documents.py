@@ -50,14 +50,16 @@ def get_my_documents(
 ):
     return db.query(models.UserDocument).filter(models.UserDocument.user_id == current_user.id).all()
 
-# 3. VER DOCUMENTOS DE UN INQUILINO (Dueño)
+# 3. VER DOCUMENTOS DE UN USUARIO (Dueño o el propio Usuario)
+# --- CORREGIDO PARA EVITAR EL ERROR 403 ---
 @router.get("/user/{user_id}", response_model=List[doc_schema.DocumentResponse])
 def get_tenant_documents(
     user_id: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role != models.UserRole.landlord:
+    # Lógica corregida: Permitir si es Landlord O si es el mismo usuario
+    if current_user.role != models.UserRole.landlord and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     
     return db.query(models.UserDocument).filter(models.UserDocument.user_id == user_id).all()
@@ -70,17 +72,29 @@ def update_document_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # 1. Validar permisos
     if current_user.role != models.UserRole.landlord:
         raise HTTPException(status_code=403, detail="Solo los dueños pueden verificar documentos")
 
+    # 2. Buscar el documento
     doc = db.query(models.UserDocument).filter(models.UserDocument.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
+    # 3. Actualizar estado del documento
     doc.status = status_update.status
     if status_update.rejection_reason:
         doc.rejection_reason = status_update.rejection_reason
     
+    # --- NUEVA LÓGICA: Actualizar verificación del usuario ---
+    # CORREGIDO: Usamos .verified porque así se llama en tu models.py (no .approved)
+    if doc.status == models.DocumentStatus.verified:
+        # Buscamos al dueño del documento
+        doc_owner = db.query(models.User).filter(models.User.id == doc.user_id).first()
+        if doc_owner:
+            doc_owner.is_verified = True
+    # ---------------------------------------------------------
+
     db.commit()
     db.refresh(doc)
     return doc
