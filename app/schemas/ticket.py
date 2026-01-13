@@ -3,7 +3,6 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 
-# Definimos los Enums aquí para validación de Pydantic
 class TicketPriority(str, Enum):
     low = "low"
     medium = "medium"
@@ -16,29 +15,31 @@ class TicketStatus(str, Enum):
     resolved = "resolved"
     cancelled = "cancelled"
 
-# Datos base
 class TicketBase(BaseModel):
     title: str
     description: str
     priority: TicketPriority = TicketPriority.medium
 
-# Datos para CREAR (POST)
+# --- CAMBIO IMPORTANTE ---
 class TicketCreate(TicketBase):
-    property_id: str
-    unit_id: Optional[str] = None
+    unit_id: str  # Obligatorio: El usuario DEBE decir dónde es el problema
+    property_id: Optional[str] = None # Opcional: El backend lo calcula
 
-# Datos para ACTUALIZAR ESTADO (PATCH)
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
 
-# Datos para RESPONDER (GET)
 class TicketResponse(TicketBase):
     id: str
     property_id: str
+    unit_id: Optional[str]
     requester_id: str
     status: TicketStatus
     created_at: datetime
-    # resolved_at: Optional[datetime] = None 
+    
+    # Campos extra informativos (Opcionales por si vienen vacíos)
+    property_name: Optional[str] = None
+    unit_number: Optional[str] = None
+    requester_name: Optional[str] = None
 
     class Config:
         from_attributes = True

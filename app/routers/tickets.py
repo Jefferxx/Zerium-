@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
+import uuid
 from datetime import datetime
 from app.database import get_db
-from app.models import MaintenanceTicket, Property, User, TicketStatus
+from app import models
+# Importamos schemas y models con nombres claros
 from app.schemas import ticket as ticket_schema
 from app.dependencies import get_current_user
 
@@ -12,80 +14,122 @@ router = APIRouter(
     tags=["Maintenance Tickets"]
 )
 
-# 1. CREAR TICKET
+# 1. CREAR TICKET (Lógica Corregida)
 @router.post("/", response_model=ticket_schema.TicketResponse, status_code=status.HTTP_201_CREATED)
 def create_ticket(
     ticket: ticket_schema.TicketCreate, 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user)
 ):
-    # Validar que la propiedad exista
-    prop = db.query(Property).filter(Property.id == ticket.property_id).first()
-    if not prop:
-        raise HTTPException(status_code=404, detail="Propiedad no encontrada")
+    # 1. Buscar la Unidad
+    unit = db.query(models.Unit).filter(models.Unit.id == ticket.unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
-    # Crear Ticket (Nace como PENDING)
-    new_ticket = MaintenanceTicket(
+    # 2. Validar Seguridad (Inquilino vs Dueño)
+    if current_user.role == models.UserRole.tenant:
+        # Verificar que tenga contrato ACTIVO en esa unidad
+        contract = db.query(models.Contract).filter(
+            models.Contract.unit_id == unit.id,
+            models.Contract.tenant_id == current_user.id,
+            models.Contract.status.in_(['active', 'pending', 'signed_by_tenant'])
+        ).first()
+        
+        if not contract:
+            raise HTTPException(status_code=403, detail="No tienes un contrato válido en esta unidad.")
+            
+    elif current_user.role == models.UserRole.landlord:
+        # Verificar que sea SU propiedad
+        if unit.property.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="No puedes crear tickets en propiedades ajenas")
+
+    # 3. Crear Ticket (Vinculación Automática)
+    new_ticket = models.MaintenanceTicket(
+        id=str(uuid.uuid4()),
         title=ticket.title,
         description=ticket.description,
         priority=ticket.priority,
-        property_id=ticket.property_id,
-        unit_id=ticket.unit_id,
+        status=models.TicketStatus.pending,
+        
+        unit_id=unit.id,
+        property_id=unit.property_id, # <--- El backend asigna la propiedad correcta
         requester_id=current_user.id,
-        status=TicketStatus.pending, # Estado inicial
-        is_resolved=False            # Compatibilidad
+        
+        is_resolved=False 
     )
+
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
+    
+    # 4. Rellenar datos extra para la respuesta inmediata
+    # (Opcional, pero ayuda al frontend a no mostrar "null")
+    new_ticket.property_name = unit.property.name
+    new_ticket.unit_number = unit.unit_number
+    
     return new_ticket
 
-# 2. LISTAR TICKETS (CON SEGURIDAD)
+# 2. LISTAR TICKETS (Enriquecido con datos)
 @router.get("/", response_model=List[ticket_schema.TicketResponse])
-def get_tickets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """
-    Filtra tickets para que cada usuario vea solo lo suyo.
-    """
-    if current_user.role == "tenant":
-        # Inquilino ve lo que él pidió
-        return db.query(MaintenanceTicket).filter(MaintenanceTicket.requester_id == current_user.id).all()
+def get_tickets(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     
-    # Landlord ve tickets de sus propiedades
-    return db.query(MaintenanceTicket).join(Property).filter(Property.owner_id == current_user.id).all()
+    # Query base con relaciones cargadas para eficiencia
+    query = db.query(models.MaintenanceTicket)\
+        .join(models.Unit)\
+        .join(models.Property)\
+        .join(models.User, models.MaintenanceTicket.requester_id == models.User.id)\
+        .options(
+            joinedload(models.MaintenanceTicket.unit).joinedload(models.Unit.property),
+            joinedload(models.MaintenanceTicket.requester)
+        )
 
-# 3. ACTUALIZAR ESTADO DEL TICKET (PATCH)
+    if current_user.role == models.UserRole.tenant:
+        tickets = query.filter(models.MaintenanceTicket.requester_id == current_user.id).all()
+    
+    elif current_user.role == models.UserRole.landlord:
+        tickets = query.filter(models.Property.owner_id == current_user.id).all()
+    
+    else:
+        return []
+
+    # Mapeo manual para el Schema
+    results = []
+    for t in tickets:
+        # Asignamos los valores calculados al objeto antes de devolverlo
+        t.property_name = t.unit.property.name if t.unit and t.unit.property else "N/A"
+        t.unit_number = t.unit.unit_number if t.unit else "N/A"
+        t.requester_name = t.requester.full_name or t.requester.email
+        results.append(t)
+
+    return results
+
+# 3. ACTUALIZAR ESTADO (Manteniendo tu lógica)
 @router.patch("/{ticket_id}/status", response_model=ticket_schema.TicketResponse)
 def update_ticket_status(
     ticket_id: str,
     status_update: ticket_schema.TicketStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user)
 ):
-    # Buscar el ticket
-    ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
+    ticket = db.query(models.MaintenanceTicket).filter(models.MaintenanceTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     
-    # Validar Permisos (Solo Landlord)
-    if current_user.role != "landlord":
+    if current_user.role != models.UserRole.landlord:
         raise HTTPException(status_code=403, detail="Solo el dueño puede cambiar el estado")
     
-    # Verificar propiedad
-    prop = db.query(Property).filter(Property.id == ticket.property_id, Property.owner_id == current_user.id).first()
-    if not prop:
-        raise HTTPException(status_code=403, detail="No tienes permiso sobre esta propiedad")
+    # Verificación estricta de propiedad
+    unit = db.query(models.Unit).filter(models.Unit.id == ticket.unit_id).first()
+    if not unit or unit.property.owner_id != current_user.id:
+         raise HTTPException(status_code=403, detail="No tienes permiso sobre esta propiedad")
 
-    # Actualizar Estado
     ticket.status = status_update.status
 
-    # Lógica de sincronización (Legacy support)
-    if status_update.status == TicketStatus.resolved:
+    # Lógica legacy
+    if status_update.status == models.TicketStatus.resolved:
         ticket.is_resolved = True
         ticket.resolved_at = datetime.now()
-    elif status_update.status == TicketStatus.in_progress:
-        ticket.is_resolved = False
-        ticket.resolved_at = None
-    else: # pending / cancelled
+    else:
         ticket.is_resolved = False
         ticket.resolved_at = None
         

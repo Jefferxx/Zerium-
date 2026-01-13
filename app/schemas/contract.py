@@ -25,10 +25,11 @@ class TenantInfo(BaseModel):
 class ContractResponse(ContractBase):
     id: str
     is_active: bool
-    status: ContractStatus # <--- CAMPO NUEVO
+    status: ContractStatus
     contract_file_url: Optional[str] = None
     
-    # --- CAMPO NUEVO: BALANCE ---
+    # --- CAMPOS DE DEUDA ---
+    total_contract_value: float = 0.0  # <--- ¡FALTABA ESTE! Agrégalo.
     balance: Optional[float] = None 
     
     unit: Optional[UnitInfo] = None      

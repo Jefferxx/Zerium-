@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import uuid
 from app.database import get_db
@@ -12,50 +12,43 @@ router = APIRouter(
     tags=["Payments"]
 )
 
-# 1. REGISTRAR UN PAGO (Inquilinos y Dueños)
+# 1. REGISTRAR UN PAGO
 @router.post("/", response_model=payment_schema.PaymentResponse, status_code=status.HTTP_201_CREATED)
 def create_payment(
     payment: payment_schema.PaymentCreate, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Buscar el contrato
     contract = db.query(models.Contract).filter(models.Contract.id == payment.contract_id).first()
     
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
-    # --- VALIDACIÓN DE PERMISOS ---
+    # Validar Permisos
     if current_user.role == models.UserRole.tenant:
         if contract.tenant_id != current_user.id:
-            raise HTTPException(status_code=403, detail="No puedes registrar pagos en un contrato que no es tuyo")
-            
+            raise HTTPException(status_code=403, detail="No puedes registrar pagos en un contrato ajeno")    
     elif current_user.role == models.UserRole.landlord:
-        # Verificar propiedad a través de la unidad
         unit = db.query(models.Unit).filter(models.Unit.id == contract.unit_id).first()
         if not unit or unit.property.owner_id != current_user.id:
             raise HTTPException(status_code=403, detail="No tienes permiso sobre este contrato")
-    
     else:
-        raise HTTPException(status_code=403, detail="Rol no autorizado para pagos")
+        raise HTTPException(status_code=403, detail="Rol no autorizado")
 
-    # --- VALIDACIÓN FINANCIERA (NUEVO BLOQUE) ---
-    
-    # Calculamos la deuda actual. Si balance es None, es porque es el primer pago (deuda total)
-    current_debt = contract.balance if contract.balance is not None else contract.amount
+    # --- LÓGICA DEUDA GLOBAL ---
+    # El balance ahora representa TODO lo que falta pagar del contrato entero
+    current_debt = contract.balance 
 
-    # 1. Si ya no debe nada
     if current_debt <= 0:
-        raise HTTPException(status_code=400, detail="¡Este contrato ya está pagado! No tienes deuda pendiente.")
+        raise HTTPException(status_code=400, detail="¡Este contrato ya está pagado en su totalidad!")
 
-    # 2. Si intenta pagar más de lo que debe (con un margen de error de 1 centavo por redondeo)
-    if float(payment.amount) > (float(current_debt) + 0.01):
+    # Permitimos un pequeño margen de error por decimales (0.10 ctvs)
+    if float(payment.amount) > (float(current_debt) + 0.10):
         raise HTTPException(
             status_code=400, 
-            detail=f"El monto excede la deuda actual. Solo debes: ${current_debt}"
+            detail=f"El monto excede la deuda total del contrato. Deuda restante: ${current_debt}"
         )
 
-    # --- TRANSACCIÓN FINANCIERA ---
     new_payment = models.Payment(
         id=str(uuid.uuid4()),
         contract_id=payment.contract_id,
@@ -64,8 +57,13 @@ def create_payment(
         notes=payment.notes
     )
     
-    # Actualizar el Balance
+    # Restamos del Saldo Global
     contract.balance = float(current_debt) - float(payment.amount)
+
+    # Si la deuda llega a 0, podriamos marcar el contrato como finalizado (opcional)
+    if contract.balance <= 0.10:
+        contract.balance = 0.0
+        # contract.status = models.ContractStatus.terminated # Opcional
 
     db.add(new_payment)
     db.commit()
@@ -90,9 +88,34 @@ def get_my_payments_history(
             .join(models.Contract)\
             .join(models.Unit)\
             .join(models.Property)\
+            .options(
+                joinedload(models.Payment.contract).joinedload(models.Contract.unit).joinedload(models.Unit.property),
+                joinedload(models.Payment.contract).joinedload(models.Contract.tenant)
+            )\
             .filter(models.Property.owner_id == current_user.id)\
             .order_by(models.Payment.payment_date.desc()).all()
-        return payments
+        
+        results = []
+        for p in payments:
+            prop_name = p.contract.unit.property.name if (p.contract and p.contract.unit and p.contract.unit.property) else "N/A"
+            unit_num = p.contract.unit.unit_number if (p.contract and p.contract.unit) else "N/A"
+            t_name = "Desconocido"
+            if p.contract and p.contract.tenant:
+                t_name = p.contract.tenant.full_name or p.contract.tenant.email
+
+            p_data = {
+                "id": p.id,
+                "amount": p.amount,
+                "payment_method": p.payment_method,
+                "notes": p.notes,
+                "contract_id": p.contract_id,
+                "payment_date": p.payment_date,
+                "property_name": prop_name,
+                "unit_number": unit_num,
+                "tenant_name": t_name
+            }
+            results.append(p_data)
+        return results
     
     return []
 
@@ -107,7 +130,6 @@ def get_payments_by_contract(
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
-    # Validación de seguridad
     if current_user.role == models.UserRole.tenant and contract.tenant_id != current_user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
         
