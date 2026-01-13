@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from app.models import ContractStatus # <--- IMPORTAR ENUM
 
 class ContractBase(BaseModel):
     unit_id: str
@@ -24,10 +25,10 @@ class TenantInfo(BaseModel):
 class ContractResponse(ContractBase):
     id: str
     is_active: bool
+    status: ContractStatus # <--- CAMPO NUEVO
     contract_file_url: Optional[str] = None
     
     # --- CAMPO NUEVO: BALANCE ---
-    # Esto permitirá ver la deuda actual en Swagger y en el Frontend
     balance: Optional[float] = None 
     
     unit: Optional[UnitInfo] = None      

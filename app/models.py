@@ -59,6 +59,13 @@ class DocumentStatus(str, enum.Enum):
     verified = "verified" # Aprobado por el dueño/admin
     rejected = "rejected" # Rechazado (foto borrosa, etc.)
 
+# --- NUEVO ENUM PARA CONTRATOS ---
+class ContractStatus(str, enum.Enum):
+    pending = "pending"       # Creado, falta firma del inquilino
+    active = "active"         # Firmado y vigente
+    terminated = "terminated" # Finalizado
+    rejected = "rejected"     # Inquilino rechazó
+
 # =======================
 # 2. TABLAS (MODELOS)
 # =======================
@@ -142,7 +149,12 @@ class Contract(Base):
     amount = Column(Float, nullable=False)
     balance = Column(Float, default=0.0)
     payment_day = Column(Integer, default=5)
-    is_active = Column(Boolean, default=True)
+    
+    # --- CAMBIOS DE ESTADO ---
+    is_active = Column(Boolean, default=False) # Ahora nace inactivo
+    status = Column(Enum(ContractStatus), default=ContractStatus.pending) # Nuevo campo status
+    # -------------------------
+
     contract_file_url = Column(String, nullable=True)
 
     unit = relationship("Unit", back_populates="contracts")
